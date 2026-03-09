@@ -54,8 +54,6 @@ async function httpRequest(url, options = {}) {
     timeout: options.timeout,
     httpsAgent: INSECURE_HTTPS_AGENT,
     validateStatus: () => true,
-    responseType: "text",
-    transformResponse: [(data) => data],
   });
 
   let body = response.data;
@@ -109,11 +107,6 @@ async function requestWithFailover(path, options = {}) {
       });
 
       if (response.statusCode === 200 && response.body) {
-        if (isBlockedHtml(response.body)) {
-          OmniBox.log("warn", `域名 ${baseUrl} 命中风控页,切换下一个域名`);
-          lastError = new Error("命中风控页面");
-          continue;
-        }
         OmniBox.log("info", `域名 ${baseUrl} 请求成功`);
         return { response, baseUrl };
       } else {
