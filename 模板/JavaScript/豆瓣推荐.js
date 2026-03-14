@@ -2,34 +2,34 @@
 // @indexs 1
 // @author lampon
 // @description 豆瓣推荐爬虫脚本
-// @version 1.0.0
+// @version 1.0.1
 // @downloadURL https://xget.xi-xu.me/gh/Silent1566/OmniBox-Spider/raw/refs/heads/main/模板/JavaScript/豆瓣.js
 
 const OmniBox = require("omnibox_sdk");
 
 // 导出接口
-module.exports = { 
+module.exports = {
   home,
   category,
-}; 
- 
+};
+
 // 使用公共 runner 处理标准输入/输出
 const runner = require("spider_runner");
 runner.run(module.exports);
-  
+
 /**
  * 获取首页数据
  * @param {Object} params - 参数对象
- * @returns {Object} 返回分类列表和推荐视频列表 
+ * @returns {Object} 返回分类列表和推荐视频列表
  */
-async function home(params) {
+async function home(params, context) {
   try {
     // 构建分类列表
     const classes = [
       { type_id: "movie", type_name: "选电影" },
       { type_id: "tv", type_name: "选剧集" },
       { type_id: "show", type_name: "选综艺" },
-      { type_id: "movie_filter", type_name: "电影筛选" }, 
+      { type_id: "movie_filter", type_name: "电影筛选" },
       { type_id: "tv_filter", type_name: "电视剧筛选" },
       { type_id: "show_filter", type_name: "综艺筛选" },
     ];
@@ -37,9 +37,9 @@ async function home(params) {
     // 获取Banner数据（直接请求腾讯接口）
     let banner = [];
     try {
-      const baseURL = process.env.OMNIBOX_BASE_URL || "";
+      const baseURL = context.baseURL || "";
       const tencentBannerUrl = "https://pbaccess.video.qq.com/trpc.vector_layout.page_view.PageService/getPage?video_appid=3000010&vversion_platform=2";
-      
+
       // 构建请求体
       const requestData = {
         page_params: {
@@ -48,10 +48,10 @@ async function home(params) {
           scene: "channel",
           new_mark_label_enabled: "1",
           vl_to_mvl: "",
-          free_watch_trans_info: "{\"ad_frequency_control_time_list\":{}}",
+          free_watch_trans_info: '{"ad_frequency_control_time_list":{}}',
           ad_exp_ids: "100000",
           ams_cookies: "lv_play_index=26; o_minduid=CpGFdExDeM8uP-XHCyma_0PzurMADpcf; appuser=83C1297D3AE9DEFF",
-          ad_trans_data: "{\"game_sessions\":[]}",
+          ad_trans_data: '{"game_sessions":[]}',
           skip_privacy_types: "0",
           support_click_scan: "1",
         },
@@ -82,20 +82,20 @@ async function home(params) {
       if (tencentBannerResponse.statusCode === 200 && tencentBannerResponse.body) {
         let tencentBannerBodyStr = typeof tencentBannerResponse.body === "string" ? tencentBannerResponse.body : String(tencentBannerResponse.body);
         const tencentBannerData = JSON.parse(tencentBannerBodyStr);
-        
+
         // 解析腾讯响应数据，提取轮播图卡片
         if (tencentBannerData.data && tencentBannerData.data.CardList && Array.isArray(tencentBannerData.data.CardList)) {
           for (const cardList of tencentBannerData.data.CardList) {
             // 只处理轮播图类型的卡片
             if (cardList.type === "pc_carousel" && cardList.children_list && cardList.children_list.list && cardList.children_list.list.cards) {
               const cards = cardList.children_list.list.cards;
-              
+
               for (const card of cards) {
                 // 只提取有背景图片的内容（pic_ori_2880x900）
                 if (card.params && card.params.pic_ori_2880x900) {
                   // 处理背景图片URL
                   let backgroundImage = card.params.pic_ori_2880x900 || card.params.image_url || "";
-                  
+
                   // 如果图片URL是外部URL，需要通过代理
                   if (backgroundImage && baseURL && !backgroundImage.includes(baseURL) && backgroundImage.startsWith("http")) {
                     const urlWithHeaders = `${backgroundImage}@Referer=https://v.qq.com`;
@@ -132,7 +132,7 @@ async function home(params) {
                   }
                 }
               }
-              
+
               // 如果已经取够5个，跳出外层循环
               if (banner.length >= 5) {
                 break;
@@ -538,21 +538,21 @@ async function home(params) {
       const tvListResponse = await OmniBox.request(tvListUrl, {
         method: "GET",
         headers: {
-          "Accept": "*/*",
+          Accept: "*/*",
           "Accept-Encoding": "gzip, deflate, br",
-          "Connection": "keep-alive",
+          Connection: "keep-alive",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "referer": "https://movie.douban.com/tv/",
+          referer: "https://movie.douban.com/tv/",
         },
       });
 
       if (tvListResponse.statusCode === 200 && tvListResponse.body) {
         let tvListBodyStr = typeof tvListResponse.body === "string" ? tvListResponse.body : String(tvListResponse.body);
         const tvListData = JSON.parse(tvListBodyStr);
-        
+
         if (tvListData.items && Array.isArray(tvListData.items)) {
-          const baseURL = process.env.OMNIBOX_BASE_URL || "";
-          
+          const baseURL = context.baseURL || "";
+
           list = tvListData.items.map((item) => {
             // 从 card_subtitle 提取年份信息
             let vod_year = "";
@@ -569,7 +569,6 @@ async function home(params) {
             } else if (item.is_new) {
               vod_remarks = "新剧";
             }
-            
 
             // 处理图片URL
             let vod_pic = item.pic?.large || item.pic?.normal || "";
@@ -599,7 +598,7 @@ async function home(params) {
               vod_name: item.title || "",
               vod_pic: vod_pic,
               type_id: "tv",
-              search:true,
+              search: true,
               type_name: "选剧集",
               vod_remarks: vod_remarks,
               vod_year: vod_year,
@@ -642,7 +641,7 @@ async function home(params) {
  *   - pagecount: 总页数
  *   - total: 总记录数
  */
-async function category(params) {
+async function category(params, context) {
   try {
     const categoryId = params.categoryId || "movie";
     const page = params.page || 1;
@@ -697,7 +696,7 @@ async function category(params) {
       const sort = filters.sort || "U"; // 排序，默认热度
 
       // 构建 selected_categories JSON（形式固定为"电视剧"）
-      const selectedCategories = { "形式": "电视剧" };
+      const selectedCategories = { 形式: "电视剧" };
       if (genre) selectedCategories["类型"] = genre;
       if (region) selectedCategories["地区"] = region;
       const selectedCategoriesStr = JSON.stringify(selectedCategories);
@@ -722,7 +721,7 @@ async function category(params) {
       const sort = filters.sort || "U"; // 排序，默认热度
 
       // 构建 selected_categories JSON（形式固定为"综艺"）
-      const selectedCategories = { "形式": "综艺" };
+      const selectedCategories = { 形式: "综艺" };
       if (genre) selectedCategories["类型"] = genre;
       if (region) selectedCategories["地区"] = region;
       const selectedCategoriesStr = JSON.stringify(selectedCategories);
@@ -746,11 +745,11 @@ async function category(params) {
     const response = await OmniBox.request(url, {
       method: "GET",
       headers: {
-        "Accept": "*/*",
+        Accept: "*/*",
         "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "referer": referer,
+        referer: referer,
       },
     });
 
@@ -805,23 +804,22 @@ async function category(params) {
 
       // 构建备注信息
       let vod_remarks = "";
-      
+
       // 对于剧集和综艺，优先显示集数信息
       if (item.episodes_info && item.episodes_info.trim()) {
         vod_remarks = item.episodes_info.trim();
       } else if (item.is_new) {
         vod_remarks = categoryId === "movie" ? "新片" : "新剧";
       }
-      
 
       // 处理图片URL，使用通用图片代理接口
       // 通过环境变量获取baseURL（脚本执行时会自动注入）
-      const baseURL = process.env.OMNIBOX_BASE_URL || "";
+      const baseURL = context.baseURL || "";
       let vod_pic = item.pic?.large || item.pic?.normal || "";
       if (vod_pic) {
         // 构建带headers的URL格式: url@Referer=value
         const urlWithHeaders = `${vod_pic}@Referer=https://m.douban.com`;
-        
+
         // 如果有baseURL，拼接完整的代理接口地址
         if (baseURL) {
           // 编码URL参数
@@ -832,7 +830,7 @@ async function category(params) {
           vod_pic = urlWithHeaders;
         }
       }
- 
+
       // 构建副标题（从card_subtitle提取，去除年份部分）
       let vod_subtitle = "";
       if (cardSubtitle) {
@@ -850,7 +848,7 @@ async function category(params) {
       return {
         vod_id: item.id || `douban_${item.uri}`,
         vod_name: item.title || "",
-        search:true,
+        search: true,
         vod_pic: vod_pic,
         type_id: categoryId,
         type_name: typeName,
@@ -879,4 +877,3 @@ async function category(params) {
     };
   }
 }
-
